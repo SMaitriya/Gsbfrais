@@ -43,6 +43,19 @@ class PdoGsb{
 	}
 
 
+	
+
+	public function getComptable($login, $mdp)
+	{
+		$req = "select comptable.id as id, comptable.nom as nom, comptable.prenom as prenom from comptable 
+		where comptable.login='" . $login . "' and comptable.mdp='" . $mdp ."'";
+		$rs = $this->monPdo->query($req);
+		$ligne = $rs->fetch();
+		return $ligne;
+
+	}
+
+
 
 /**
  * Retourne sous forme d'un tableau associatif toutes les lignes de frais au forfait
@@ -75,8 +88,24 @@ public function getMontantEngage($idVisiteur,$mois){
 	$laLigne = $res->fetch();
 	return $laLigne;
 }
-/*==============================================================*/
+
+
+public function updateFicheFraismontant($idVisiteur, $mois) {
+    $req = "UPDATE fichefrais 
+            SET montantValide = (
+                SELECT SUM(fraisforfait.montant * lignefraisforfait.quantite) as montant
+                FROM fraisforfait
+                INNER JOIN lignefraisforfait ON fraisforfait.id = lignefraisforfait.idFraisForfait
+                WHERE lignefraisforfait.idVisiteur = '$idVisiteur' AND lignefraisforfait.mois = '$mois'
+            ),
+            dateModif = NOW(),
+			idEtat = 'VA' 
+            WHERE idVisiteur = '$idVisiteur' AND mois = '$mois'";
+			
     
+    // Exécution de la requête
+    $res = $this->monPdo->exec($req);
+}
 
 /**
  * Retourne tous les id de la table FraisForfait
@@ -144,6 +173,36 @@ public function getMontantEngage($idVisiteur,$mois){
 		$dernierMois = $laLigne['dernierMois'];
 		return $dernierMois;
 	}
+
+/** @return le mois en fonction de l'id visiteur et l'etat CR */
+
+public function moisvisiteurscr($idVisiteur) {
+    $req = "SELECT mois FROM fichefrais WHERE idVisiteur = '$idVisiteur' AND idEtat = 'CR'";
+	$res = $this->monPdo->query($req);
+	return $res->fetchAll(PDO::FETCH_ASSOC);
+}
+
+public function touslesmoisva() {
+	$req = "SELECT mois FROM fichefrais WHERE idEtat = 'VA'";
+	$res = $this->monPdo->query($req);
+	return $res->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/** afficher les frais CR avec Visiteur + Montant */
+
+public function voirFicheCrVisiteurMontant($mois){
+	$req = $this->monPdo->prepare("SELECT visiteur.nom, visiteur.prenom , fichefrais.mois, fichefrais.montantValide
+	FROM visiteur
+	INNER JOIN
+	fichefrais
+	ON
+	visiteur.id = fichefrais.idVisiteur
+	WHERE
+	mois = ?");
+	$req->execute([$mois]);
+	$lignes = $req->fetchAll();
+	return $lignes;
+}
 	
 /**
  * Crée une nouvelle fiche de frais et les lignes de frais au forfait pour un visiteur et un mois donnés
@@ -226,6 +285,54 @@ public function getMontantEngage($idVisiteur,$mois){
 		where fichefrais.idvisiteur ='$idVisiteur' and fichefrais.mois = '$mois'";
 		$this->monPdo->exec($req);
 	}
+
+
+	/* Fonction pour récuperer la quantité de Forfait Etape en fonction du mois */
+
+	public function getForfaitEtp($idVisiteur, $mois) {
+		$req = "SELECT quantite FROM lignefraisforfait WHERE idVisiteur = '$idVisiteur' AND mois = $mois AND idFraisForfait = 'ETP'";
+		$res = $this->monPdo->query($req);
+		return $res->fetchColumn(); // Récupérer uniquement la valeur de la colonne "quantite" car sinon ca devient un tableau
+	}
+
+	/* Fonction pour récuperer la quantité de Frais KM en fonction du mois */
+
+	public function getForfaitKm($idVisiteur, $mois) {
+		$req = "SELECT quantite FROM lignefraisforfait WHERE idVisiteur = '$idVisiteur' AND mois = $mois AND idFraisForfait = 'KM'";
+		$res = $this->monPdo->query($req);
+		return $res->fetchColumn(); 
+	}
+		
+	/* Fonction pour récuperer la quantité de Nuitée hôtel en fonction du mois */
+
+
+	public function getForfaitNui($idVisiteur, $mois) {
+		$req = "SELECT quantite FROM lignefraisforfait WHERE idVisiteur = '$idVisiteur' AND mois = $mois AND idFraisForfait = 'NUI'";
+		$res = $this->monPdo->query($req);
+		return $res->fetchColumn(); 
+	}
+
+	/* Fonction pour récuperer la quantité de Repas Restaurant en fonction du mois */
+
+	public function getForfaitRep($idVisiteur, $mois) {
+		$req = "SELECT quantite FROM lignefraisforfait WHERE idVisiteur = '$idVisiteur' AND mois = $mois AND idFraisForfait = 'REP'";
+		$res = $this->monPdo->query($req);
+		return $res->fetchColumn(); 
+	}
+
+	/* Fonction pour update lesfichefrais CR */
+
+	public function updateFicheFraisForfait($idVisiteur, $mois, $forfaitType, $quantite) {
+		$req = "UPDATE lignefraisforfait 
+				SET quantite = $quantite
+				WHERE idVisiteur = '$idVisiteur'
+				AND mois = $mois 
+				AND idFraisForfait = '$forfaitType'";
+		
+	$this->monPdo->exec($req);
+	}
+
+
 
 
 
